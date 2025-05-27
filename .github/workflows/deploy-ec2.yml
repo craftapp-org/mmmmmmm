@@ -62,7 +62,7 @@ jobs:
           script: |
             cd "${{ env.PROJECT_DIR }}"
             chmod +x devops/nginx-setup.sh
-            devops/nginx-setup.sh "${{ env.PROJECT_NAME }}" "keraamzabih@gmail.com" "44.203.250.84" "craftapp" "ai" "${{ env.FRONTEND_PORT }}" "${{ env.BACKEND_PORT }}"
+            devops/nginx-setup.sh "${{ env.PROJECT_NAME }}" "keraamzabih@gmail.com" "44.203.250.84" "craftapp" "ai"
 
       # - name: Move nginx config with sudo
       #   uses: appleboy/ssh-action@master
@@ -96,9 +96,9 @@ jobs:
             docker system prune -f
             docker-compose up -d --build
             sleep 10
-                  if docker exec central-nginx nginx -t; then
-            docker exec central-nginx nginx -s reload
-            echo "✅ NGINX reloaded successfully"
+            if docker exec central-nginx nginx -t; then
+              docker exec central-nginx nginx -s reload
+              echo "✅ NGINX reloaded successfully"
             else
               echo "❌ NGINX configuration test failed"
               exit 1

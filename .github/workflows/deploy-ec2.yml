@@ -18,6 +18,8 @@ env:
   CPU_SET: "0-1"
   OOM_SCORE_ADJ: "-500"
   STORAGE_LIMIT_GB: "2"
+  CENTRAL_NGINX_DIR: "/home/ubuntu/app/central-nginx"
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -40,6 +42,17 @@ jobs:
           source: "./"
           target:  "${{ env.PROJECT_DIR }}"
 
+      - name: Update central-nginx networks
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_INSTANCE_IP }}
+          username: ubuntu
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd "${{ env.PROJECT_DIR }}"
+            sudo chmod +x devops/update_compose.sh
+            devops/update_compose.sh "${{ env.PROJECT_NAME }}"
+
       - name: Run nginx.sh on EC2
         uses: appleboy/ssh-action@master
         with:
@@ -47,9 +60,9 @@ jobs:
           username: ubuntu
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            chmod +x "${{ env.PROJECT_DIR }}/devops/nginx-setup.sh"
-            # "${{ env.PROJECT_DIR }}/devops/dns-setup.sh" "${{ env.PROJECT_NAME }}" "keraamzabih@gmail.com" "44.203.250.84" "craftapp" "ai" "alimahmady" "b852804c3d3c4b7db33950bb965f6c75" "${{ env.FRONTEND_PORT }}" "${{ env.BACKEND_PORT }}"
-            "${{ env.PROJECT_DIR }}/devops/nginx-setup.sh" "${{ env.PROJECT_NAME }}" "keraamzabih@gmail.com" "44.203.250.84" "craftapp" "ai" "${{ env.FRONTEND_PORT }}" "${{ env.BACKEND_PORT }}"
+            cd "${{ env.PROJECT_DIR }}"
+            chmod +x devops/nginx-setup.sh
+            devops/nginx-setup.sh "${{ env.PROJECT_NAME }}" "keraamzabih@gmail.com" "44.203.250.84" "craftapp" "ai" "${{ env.FRONTEND_PORT }}" "${{ env.BACKEND_PORT }}"
 
       - name: Move nginx config with sudo
         uses: appleboy/ssh-action@master
@@ -60,7 +73,6 @@ jobs:
           script: |
             sudo nginx -t && sudo systemctl reload nginx
 
-
       - name: Deploy application
         uses: appleboy/ssh-action@master
         with:
@@ -68,32 +80,26 @@ jobs:
           username: ubuntu
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            set -e  # Exit immediately if any command fails
-            # Setup database directory
+            set -e
             sudo mkdir -p "${{ env.POSTGRES_DATA_DIR }}"
             sudo chown -R 1000:1000 "${{ env.POSTGRES_DATA_DIR }}"
             sudo chmod -R 755 "/opt/${{ env.PROJECT_NAME }}"
-            # Get storage device ID (assuming root device)
             DEVICE_ID=$(lsblk -d -o MAJ:MIN | awk 'NR==2{print $1}')
-            # Set secure permissions for .env files
             cd "${{ env.PROJECT_DIR }}"
             sudo chmod +x devops/init-db.sh
             sudo chmod +x devops/cgroup-setup.sh
             sudo chmod 644 frontend/.env
             sudo chmod 644 backend/.env
             sudo chmod 644 .env
-            ./devops/cgroup-setup.sh "${{ env.PROJECT_NAME }}" "${{ env.CPU_LIMIT }}" "${{ env.MEMORY_LIMIT }}"  "${{ env.STORAGE_LIMIT_GB }}" "$DEVICE_ID"
-            # Clean up and deploy with explicit env file
+            ./devops/cgroup-setup.sh "${{ env.PROJECT_NAME }}" "${{ env.CPU_LIMIT }}" "${{ env.MEMORY_LIMIT }}" "${{ env.STORAGE_LIMIT_GB }}" "$DEVICE_ID"
             docker-compose down || true
             docker system prune -f
             docker-compose up -d --build
-            sleep 10  # Wait for full initialization
-            services=("frontend_1" "backend_1" "postgres_1")
+            sleep 10
+            services=("frontend-1" "backend-1" "postgres-1")
 
-            # Loop over each service
             for service in "${services[@]}"; do
-              container="${{ env.PROJECT_NAME }}_${service}"
-
+              container="${{ env.PROJECT_NAME }}-${service}"
               if docker ps | grep -q "$container"; then
                 pid=$(docker inspect -f '{{.State.Pid}}' "$container")
                 echo "Assigning $container (PID: $pid) to cgroup"
@@ -104,8 +110,6 @@ jobs:
               fi
             done
             
-            # Final verification
-            # Get storage device ID (assuming root device)
             echo "Current cgroup processes:"
             cat /sys/fs/cgroup/${{ env.PROJECT_NAME }}/cgroup.procs
             echo "Container stats:"

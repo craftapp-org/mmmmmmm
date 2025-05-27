@@ -24,19 +24,31 @@ fi
 # Create backup
 cp "$compose_file" "$backup_file"
 
-# Function to clean and update networks section
+# First ensure all referenced networks are properly defined
+ensure_network_definitions() {
+  # Get all networks referenced in the file
+  referenced_networks=$(grep -oP '^\s+-\s+\K[a-zA-Z0-9_-]+_app-network' "$compose_file" | sort -u)
+  
+  # Add any missing network definitions
+  for net in $referenced_networks; do
+    if ! grep -q "^  $net:" "$compose_file"; then
+      echo "  $net:" >> "$compose_file"
+      echo "    external: true" >> "$compose_file"
+    fi
+  done
+}
+
+# Update networks section under nginx service
 update_networks() {
   awk -v network="$network_name" '
   BEGIN {
     in_nginx = 0
     in_networks = 0
-    networks_found = 0
     added_new = 0
   }
   /^  nginx:/ { in_nginx = 1 }
   in_nginx && /^    networks:/ { 
     in_networks = 1
-    networks_found = 1
     print
     next
   }
@@ -60,48 +72,21 @@ update_networks() {
   ' "$compose_file"
 }
 
-# Function to update network definitions
-update_network_definitions() {
-  awk -v network="$network_name" '
-  BEGIN {
-    in_networks = 0
-    added_new = 0
-  }
-  /^networks:/ { 
-    in_networks = 1
-    print
-    next
-  }
-  in_networks && /^  [a-zA-Z0-9_-]+_app-network:/ {
-    if (!seen_definitions[$0]++) {
-      print
-      getline
-      if (/^    external: true/) print
-    }
-    next
-  }
-  in_networks && !/^  [a-zA-Z0-9_-]+_app-network:/ {
-    if (!added_new && !seen_definitions["  " network ":"]) {
-      print "  " network ":"
-      print "    external: true"
-      added_new = 1
-    }
-    in_networks = 0
-    print
-    next
-  }
-  { print }
-  '
-}
-
-# Process the file in stages
+# Process the file
+ensure_network_definitions
 update_networks > "$temp_file"
-update_network_definitions < "$temp_file" > "$compose_file"
+mv "$temp_file" "$compose_file"
 
-# Verify YAML syntax
+# Ensure our new network is defined
+if ! grep -q "^  $network_name:" "$compose_file"; then
+  echo "  $network_name:" >> "$compose_file"
+  echo "    external: true" >> "$compose_file"
+fi
+
+# Validate the compose file
 cd "$compose_dir" || exit 1
 if ! docker compose config -q; then
-  echo "❌ Error: Invalid YAML after update. Restoring backup."
+  echo "❌ Error: Invalid Docker Compose configuration. Restoring backup."
   mv "$backup_file" "$compose_file"
   exit 1
 fi
@@ -112,4 +97,4 @@ docker compose up -d --force-recreate nginx
 
 # Clean up
 rm -f "$temp_file"
-echo "✅ Updated $compose_file with network $network_name"
+echo "✅ Successfully updated $compose_file with network $network_name"

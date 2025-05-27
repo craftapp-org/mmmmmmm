@@ -6,8 +6,6 @@ email="$2"          # Email for Certbot SSL
 server_ip="$3"      # Your server IP (must already have DNS configured)
 sld="$4"            # e.g., "yourdomain" (without TLD)
 tld="$5"            # e.g., "com"
-frontend_port="$6"  # Frontend port (e.g., 3000)
-backend_port="$7"   # Backend port (e.g., 8000)
 
 # Sanitize project name to form subdomain
 sanitize_name() {
@@ -19,7 +17,7 @@ domain="${host}.${sld}.${tld}"
 echo "➡ Configuring domain: $domain (assuming DNS is already set up)"
 
 # Step 1: Create NGINX config in conf.d directory
-nginx_config="conf.d/${host}.conf"
+nginx_config="$HOME/app/central-nginx/conf.d/${host}.conf"
 sudo tee "$nginx_config" > /dev/null <<EOF
 server {
     listen 80;

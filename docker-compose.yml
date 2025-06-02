@@ -2,8 +2,6 @@ version: "3.8"
 
 x-defaults: &defaults
   PROJECT_NAME: "mmmmmmm"
-  FRONTEND_PORT: 3000
-  BACKEND_PORT: 8000
   HOST_IP: ""
 services:
   postgres:
@@ -43,8 +41,6 @@ services:
     environment:
       DB_HOST: "postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}"
       # FRONTEND_DOMAIN: "http://54.236.65.244:3000"
-    ports:
-      - "${BACKEND_PORT:-8000}:8000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -65,8 +61,6 @@ services:
     # environment:
     #   NEXT_PUBLIC_API_URL: "http://54.236.65.244:8000"
       # NEXT_PUBLIC_EXTERNAL_API_URL: "http://${HOST_IP}:8000" # For browser access
-    ports:
-      - "${FRONTEND_PORT:-3000}:3000"
     labels:
       - "com.docker.compose.project.resource-control=true"
 
